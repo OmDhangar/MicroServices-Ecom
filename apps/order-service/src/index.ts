@@ -3,6 +3,7 @@ import Clerk from "@clerk/fastify";
 import { shouldBeUser } from "./middleware/authMiddleware.js";
 import { connectOrderDB } from "@repo/order-db";
 import { orderRoute } from "./routes/order.js";
+import { cartRoute } from "./routes/cart.js";
 import { consumer, producer } from "./utils/kafka.js";
 import { runKafkaSubscriptions } from "./utils/subscriptions.js";
 
@@ -26,6 +27,7 @@ fastify.get("/test", { preHandler: shouldBeUser }, (request, reply) => {
 });
 
 fastify.register(orderRoute);
+fastify.register(cartRoute);
 
 const start = async () => {
   try {

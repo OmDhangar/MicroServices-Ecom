@@ -4,6 +4,7 @@ import { clerkMiddleware, getAuth } from "@clerk/express";
 import { shouldBeUser } from "./middleware/authMiddleware.js";
 import productRouter from "./routes/product.route";
 import categoryRouter from "./routes/category.route";
+import imageRouter from "./routes/image.route";
 import { consumer, producer } from "./utils/kafka.js";
 const app = express();
 app.use(
@@ -29,6 +30,7 @@ app.get("/test", shouldBeUser, (req, res) => {
 
 app.use("/products", productRouter);
 app.use("/categories", categoryRouter);
+app.use("/", imageRouter);
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   console.log(err);

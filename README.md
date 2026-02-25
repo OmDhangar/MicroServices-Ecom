@@ -36,8 +36,8 @@ This is a microservices-based e-commerce application built with Turborepo, Next.
     *   `DELETE /:id`: Delete a user from Clerk.
 
 ### 4. Product Service (`apps/product-service`)
-*   **Description**: Manages the product catalog and categories.
-*   **Tech Stack**: Express, PostgreSQL, Prisma, Kafka.
+*   **Description**: Manages the product catalog, categories, and product image uploads.
+*   **Tech Stack**: Express, PostgreSQL, Prisma, Kafka, AWS S3, Multer.
 *   **Port**: `8000`
 *   **Routes & Data Flow**:
     *   `GET /products`: List products (supports filtering/sorting).
@@ -45,17 +45,20 @@ This is a microservices-based e-commerce application built with Turborepo, Next.
     *   `POST /products` (Admin): Create product -> Save to Postgres.
     *   `PUT /products/:id` (Admin): Update product.
     *   `DELETE /products/:id` (Admin): Delete product.
+    *   `POST /products/:productId/upload` (Admin): Upload product images per color -> Validates color ownership -> Uploads to S3 (`products/{productId}/{color}/...`) -> Creates `FileMeta` in MongoDB -> Updates product `images` JSON.
     *   `GET /categories`: List categories.
     *   `POST /categories` (Admin): Create category.
 
 ### 5. Order Service (`apps/order-service`)
-*   **Description**: Handles order placement, history, and analytics.
+*   **Description**: Handles order placement, history, analytics, and server-side cart management.
 *   **Tech Stack**: Fastify, MongoDB, Mongoose, Kafka.
 *   **Port**: `8001`
 *   **Routes & Data Flow**:
     *   `GET /user-orders` (User): List authenticated user's orders (queries MongoDB).
     *   `GET /orders` (Admin): List all orders.
     *   `GET /order-chart` (Admin): Aggregates order data for the last 6 months for analytics charts.
+    *   `POST /cart/sync` (User): Upsert server-side cart (assigns unique `cartItemId` per item).
+    *   `GET /cart` (User): Retrieve current user's server-side cart.
     *   **Kafka Consumer**: Listens for `payment.successful` -> Creates Order in MongoDB -> Produces `order.created` event.
 
 ### 6. Payment Service (`apps/payment-service`)
@@ -76,6 +79,40 @@ This is a microservices-based e-commerce application built with Turborepo, Next.
 *   **Process Execution**:
     *   Consumes `user.created` -> Sends "Welcome" email.
     *   Consumes `order.created` -> Sends "Order Confirmation" email.
+
+### 8. Image Service (`apps/image-service`)
+*   **Description**: Handles user try-on photo uploads and AI try-on job orchestration.
+*   **Tech Stack**: Express, AWS S3, RabbitMQ, Sharp, Clerk, MongoDB.
+*   **Port**: `8004`
+*   **Routes & Data Flow**:
+    *   `POST /api/users/me/tryon-image` (User): Upload user photo -> Compress with Sharp (webp, max 1024px) -> Store in private S3 (`users/tryon-inputs/{userId}/...`) -> Create `FileMeta` (24h TTL) -> Return `imageKey`.
+    *   `POST /api/tryon/request` (User, rate-limited 5/hr): Validate `cartItemId` belongs to user's cart -> Verify user owns the image -> Create `TryOnJob` -> Publish to RabbitMQ `tryon-jobs` queue -> Return `jobId`.
+    *   `GET /api/tryon/jobs/:jobId` (User): Get job status -> If completed, return signed S3 URL (5 min expiry).
+*   **Security**: Cart ownership validation, image ownership check, rate limiting (5 requests/user/hr), file validation (≤10MB, images only).
+
+### 9. Try-On Worker (`apps/tryon-worker`)
+*   **Description**: Processes AI virtual try-on jobs from the RabbitMQ queue.
+*   **Tech Stack**: Node.js, Google Gemini AI, Sharp, AWS S3, RabbitMQ, MongoDB.
+*   **Type**: Worker (No HTTP API).
+*   **Process Execution**:
+    1.  Consumes from `tryon-jobs` RabbitMQ queue.
+    2.  Downloads user + product images from S3.
+    3.  Preprocesses with Sharp (512px, webp).
+    4.  Calls Google Gemini API for virtual try-on generation (with fallback model support).
+    5.  Validates output image quality.
+    6.  Uploads result to private S3 (`tryon-results/{userId}/{productId}/...`).
+    7.  Updates `TryOnJob` status in MongoDB.
+    8.  Retries up to 3× on failure, then marks as permanently failed.
+
+### S3 Bucket Structure
+
+All images are stored in a **single S3 bucket** with Block Public Access ON:
+
+```
+products/{productId}/{color}/{timestamp}-{id}.{ext}       # PUBLIC (via CloudFront)
+users/tryon-inputs/{userId}/{timestamp}-{id}.webp          # PRIVATE (24h auto-delete)
+tryon-results/{userId}/{productId}/{timestamp}-{id}.webp   # PRIVATE (24h auto-delete)
+```
 
 ## Environment Variables
 
@@ -120,6 +157,32 @@ This is a microservices-based e-commerce application built with Turborepo, Next.
 *   `CLERK_SECRET_KEY`: **Required**. Clerk Secret Key.
 *   `CLERK_PUBLISHABLE_KEY`: **Required**. Clerk Publishable Key.
 *   `KAFKA_BROKERS`: **Optional**. Defaults to `localhost:9094`.
+*   `AWS_ACCESS_KEY_ID`: **Required** (for image upload). AWS access key.
+*   `AWS_SECRET_ACCESS_KEY`: **Required** (for image upload). AWS secret key.
+*   `AWS_REGION`: **Required** (for image upload). AWS region (e.g. `us-east-1`).
+*   `AWS_S3_BUCKET`: **Required** (for image upload). S3 bucket name.
+*   `CLOUDFRONT_DOMAIN`: **Required** (for image upload). CloudFront distribution domain.
+*   `MONGO_URL`: **Required** (for image upload). MongoDB connection string (for FileMeta).
+
+### 8. image-service
+*   `CLERK_PUBLISHABLE_KEY`: **Required**. Clerk Publishable Key.
+*   `CLERK_SECRET_KEY`: **Required**. Clerk Secret Key.
+*   `MONGO_URL`: **Required**. MongoDB Connection String.
+*   `AWS_ACCESS_KEY_ID`: **Required**. AWS access key.
+*   `AWS_SECRET_ACCESS_KEY`: **Required**. AWS secret key.
+*   `AWS_REGION`: **Required**. AWS region.
+*   `AWS_S3_BUCKET`: **Required**. S3 bucket name.
+*   `CLOUDFRONT_DOMAIN`: **Required**. CloudFront distribution domain.
+*   `RABBITMQ_URL`: **Required**. RabbitMQ connection URL (e.g. `amqp://localhost:5672`).
+
+### 9. tryon-worker
+*   `MONGO_URL`: **Required**. MongoDB Connection String.
+*   `AWS_ACCESS_KEY_ID`: **Required**. AWS access key.
+*   `AWS_SECRET_ACCESS_KEY`: **Required**. AWS secret key.
+*   `AWS_REGION`: **Required**. AWS region.
+*   `AWS_S3_BUCKET`: **Required**. S3 bucket name.
+*   `RABBITMQ_URL`: **Required**. RabbitMQ connection URL.
+*   `GEMINI_API_KEY`: **Required**. Google Gemini API key for AI try-on generation.
 
 ---
 
@@ -128,10 +191,12 @@ This is a microservices-based e-commerce application built with Turborepo, Next.
 ### Prerequisites
 *   **Node.js** (v18+)
 *   **PNPM** (Package Manager)
-*   **Docker & Docker Compose** (For Kafka, MongoDB, Postgres)
+*   **Docker & Docker Compose** (For Kafka, MongoDB, Postgres, RabbitMQ)
 *   **Clerk Account** (For Auth)
 *   **Stripe Account** (For Payments)
 *   **Google Cloud Console** (For Gmail OAuth2 - Email Service)
+*   **AWS Account** (For S3 + CloudFront - Image Storage)
+*   **Google Gemini API Key** (For AI Try-On)
 
 ### 1. Environment Setup
 Review the `env_vars_report.md` (if available) or check `.env.example` in each service to set up your `.env` files.
@@ -142,6 +207,8 @@ Review the `env_vars_report.md` (if available) or check `.env.example` in each s
 *   `apps/order-service/.env`
 *   `apps/payment-service/.env`
 *   `apps/email-service/.env`
+*   `apps/image-service/.env`
+*   `apps/tryon-worker/.env`
 *   `packages/product-db/.env` (For database migrations)
 *   `packages/order-db/.env`
 
@@ -154,6 +221,7 @@ This will start:
 *   **Zookeeper & Kafka** (Port 9094)
 *   **MongoDB** (Port 27017)
 *   **PostgreSQL** (Port 5432)
+*   **RabbitMQ** (Port 5672, Management UI: 15672)
 
 ### 3. Run Migrations
 Ensure your SQL database schema is up to date:
@@ -179,6 +247,10 @@ pnpm --filter product-service dev
 pnpm --filter order-service dev
 pnpm --filter payment-service dev
 pnpm --filter email-service dev
+pnpm --filter image-service dev
+
+# Workers
+pnpm --filter tryon-worker dev
 
 # Frontend Apps
 pnpm --filter client dev

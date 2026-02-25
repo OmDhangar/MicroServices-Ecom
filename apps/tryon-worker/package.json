@@ -1,0 +1,23 @@
+{
+    "name": "tryon-worker",
+    "version": "1.0.0",
+    "description": "RabbitMQ worker for AI try-on image processing",
+    "main": "src/index.ts",
+    "type": "module",
+    "scripts": {
+        "dev": "pnpm dlx tsx --env-file=.env --watch src/index.ts",
+        "check-types": "tsc --noEmit"
+    },
+    "dependencies": {
+        "sharp": "^0.33.2",
+        "@google/generative-ai": "^0.21.0",
+        "@repo/s3": "workspace:*",
+        "@repo/rabbitmq": "workspace:*",
+        "@repo/order-db": "workspace:*"
+    },
+    "devDependencies": {
+        "@repo/typescript-config": "workspace:*",
+        "@types/node": "^20",
+        "typescript": "^5.9.2"
+    }
+}

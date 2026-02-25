@@ -2,6 +2,7 @@ import type { Product } from "@repo/product-db";
 import z from "zod";
 
 export type CartItemType = Product & {
+  cartItemId?: string;
   quantity: number;
   selectedSize: string;
   selectedColor: string;
@@ -35,4 +36,5 @@ export type CartStoreActionsType = {
   addToCart: (product: CartItemType) => void;
   removeFromCart: (product: CartItemType) => void;
   clearCart: () => void;
+  syncCart: () => Promise<void>;
 };

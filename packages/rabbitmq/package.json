@@ -1,0 +1,19 @@
+{
+    "name": "@repo/rabbitmq",
+    "version": "1.0.0",
+    "description": "Shared RabbitMQ connection and messaging helpers",
+    "main": "src/index.ts",
+    "type": "module",
+    "scripts": {
+        "check-types": "tsc --noEmit"
+    },
+    "dependencies": {
+        "amqplib": "^0.10.5"
+    },
+    "devDependencies": {
+        "@repo/typescript-config": "workspace:*",
+        "@types/amqplib": "^0.10.6",
+        "@types/node": "^20",
+        "typescript": "^5.9.2"
+    }
+}
