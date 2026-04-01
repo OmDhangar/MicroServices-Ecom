@@ -9,11 +9,11 @@
         "check-types": "tsc --noEmit"
     },
     "dependencies": {
-        "sharp": "^0.33.2",
-        "@google/generative-ai": "^0.21.0",
-        "@repo/s3": "workspace:*",
+        "@google/genai": "^1.43.0",
+        "@repo/order-db": "workspace:*",
         "@repo/rabbitmq": "workspace:*",
-        "@repo/order-db": "workspace:*"
+        "@repo/s3": "workspace:*",
+        "sharp": "^0.33.2"
     },
     "devDependencies": {
         "@repo/typescript-config": "workspace:*",

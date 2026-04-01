@@ -55,11 +55,14 @@ export const columns: ColumnDef<ProductType>[] = [
       return (
         <div className="w-9 h-9 relative">
           <Image
-            src={
-              (product.images as Record<string, string>)?.[
+            src={(() => {
+              const src = (product.images as Record<string, string>)?.[
                 product.colors[0] || ""
-              ] || ""
-            }
+              ];
+              return src?.startsWith("http") || src?.startsWith("data:")
+                ? src
+                : "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+            })()}
             alt={product.name}
             fill
             className="rounded-full object-cover"

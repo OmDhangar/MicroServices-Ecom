@@ -162,10 +162,15 @@ const CardList = async ({ title }: { title: string }) => {
             >
               <div className="w-12 h-12 rounded-sm relative overflow-hidden">
                 <Image
-                  src={
-                    Object.values(item.images as Record<string, string>)[0] ||
-                    ""
-                  }
+                  src={(() => {
+                    const src =
+                      Object.values(
+                        item.images as Record<string, string>
+                      )[0];
+                    return src?.startsWith("http") || src?.startsWith("data:")
+                      ? src
+                      : "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+                  })()}
                   alt={item.name}
                   fill
                   className="object-cover"

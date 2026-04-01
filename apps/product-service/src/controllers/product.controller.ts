@@ -31,7 +31,7 @@ export const createProduct = async (req: Request, res: Response) => {
     price: product.price,
   };
 
-  producer.send("product.created", { value: stripeProduct });
+  await producer.send("product.created", { value: stripeProduct });
   res.status(201).json(product);
 };
 

@@ -2,12 +2,15 @@
 
 import ShippingForm from "@/components/ShippingForm";
 import StripePaymentForm from "@/components/StripePaymentForm";
+import TryOnModal from "@/components/TryOnModal";
 import useCartStore from "@/stores/cartStore";
 import { CartItemsType, ShippingFormInputs } from "@repo/types";
 import { ArrowRight, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+const SHIPPING_FORM_KEY = "checkout_shipping_form";
 
 const steps = [
   {
@@ -84,7 +87,27 @@ const steps = [
 const CartPage = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [shippingForm, setShippingForm] = useState<ShippingFormInputs>();
+  // Always start undefined so server and client render the same initial HTML.
+  // After hydration, load the saved form from sessionStorage.
+  const [shippingForm, setShippingForm] = useState<ShippingFormInputs | undefined>(undefined);
+
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem(SHIPPING_FORM_KEY);
+      if (stored) setShippingForm(JSON.parse(stored) as ShippingFormInputs);
+    } catch {
+      // sessionStorage unavailable
+    }
+  }, []);
+
+  const handleSetShippingForm = (data: ShippingFormInputs) => {
+    setShippingForm(data);
+    try {
+      sessionStorage.setItem(SHIPPING_FORM_KEY, JSON.stringify(data));
+    } catch {
+      // sessionStorage unavailable
+    }
+  };
 
   const activeStep = parseInt(searchParams.get("step") || "1");
 
@@ -97,22 +120,19 @@ const CartPage = () => {
       <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-16">
         {steps.map((step) => (
           <div
-            className={`flex items-center gap-2 border-b-2 pb-4 ${
-              step.id === activeStep ? "border-gray-800" : "border-gray-200"
-            }`}
+            className={`flex items-center gap-2 border-b-2 pb-4 ${step.id === activeStep ? "border-gray-800" : "border-gray-200"
+              }`}
             key={step.id}
           >
             <div
-              className={`w-6 h-6 rounded-full text-white p-4 flex items-center justify-center ${
-                step.id === activeStep ? "bg-gray-800" : "bg-gray-400"
-              }`}
+              className={`w-6 h-6 rounded-full text-white p-4 flex items-center justify-center ${step.id === activeStep ? "bg-gray-800" : "bg-gray-400"
+                }`}
             >
               {step.id}
             </div>
             <p
-              className={`text-sm font-medium ${
-                step.id === activeStep ? "text-gray-800" : "text-gray-400"
-              }`}
+              className={`text-sm font-medium ${step.id === activeStep ? "text-gray-800" : "text-gray-400"
+                }`}
             >
               {step.title}
             </p>
@@ -127,59 +147,78 @@ const CartPage = () => {
             cart.map((item) => (
               // SINGLE CART ITEM
               <div
-                className="flex items-center justify-between"
+                className="flex flex-col gap-3 border-b border-gray-50 pb-6 last:border-0 last:pb-0"
                 key={item.id + item.selectedSize + item.selectedColor}
               >
-                {/* IMAGE AND DETAILS */}
-                <div className="flex gap-8">
-                  {/* IMAGE */}
-                  <div className="relative w-32 h-32 bg-gray-50 rounded-lg overflow-hidden">
-                    <Image
-                      src={
-                        (item.images as Record<string, string>)?.[
+                <div className="flex items-center justify-between">
+                  {/* IMAGE AND DETAILS */}
+                  <div className="flex gap-8">
+                    {/* IMAGE */}
+                    <div className="relative w-32 h-32 bg-gray-50 rounded-lg overflow-hidden">
+                      <Image
+                        src={
+                          (item.images as Record<string, string>)?.[
                           item.selectedColor
-                        ] || ""
-                      }
-                      alt={item.name}
-                      fill
-                      className="object-contain"
+                          ] || ""
+                        }
+                        alt={item.name}
+                        fill
+                        className="object-contain"
+                      />
+                    </div>
+                    {/* ITEM DETAILS */}
+                    <div className="flex flex-col justify-between">
+                      <div className="flex flex-col gap-1">
+                        <p className="text-sm font-medium">{item.name}</p>
+                        <p className="text-xs text-gray-500">
+                          Quantity: {item.quantity}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Size: {item.selectedSize}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Color: {item.selectedColor}
+                        </p>
+                      </div>
+                      <p className="font-medium">${(item.price * item.quantity).toFixed(2)}</p>
+                    </div>
+                  </div>
+                  {/* DELETE BUTTON */}
+                  <button
+                    onClick={() => removeFromCart(item)}
+                    className="w-8 h-8 rounded-full bg-red-100 hover:bg-red-200 transition-all duration-300 text-red-400 flex items-center justify-center cursor-pointer"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+                {/* TRY ON BUTTON */}
+                {item.cartItemId && (
+                  <div className="flex justify-start">
+                    <TryOnModal
+                      cartItemId={item.cartItemId}
+                      productName={item.name}
                     />
                   </div>
-                  {/* ITEM DETAILS */}
-                  <div className="flex flex-col justify-between">
-                    <div className="flex flex-col gap-1">
-                      <p className="text-sm font-medium">{item.name}</p>
-                      <p className="text-xs text-gray-500">
-                        Quantity: {item.quantity}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Size: {item.selectedSize}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Color: {item.selectedColor}
-                      </p>
-                    </div>
-                    <p className="font-medium">${(item.price * item.quantity).toFixed(2)}</p>
-                  </div>
-                </div>
-                {/* DELETE BUTTON */}
-                <button
-                  onClick={() => removeFromCart(item)}
-                  className="w-8 h-8 rounded-full bg-red-100 hover:bg-red-200 transition-all duration-300 text-red-400 flex items-center justify-center cursor-pointer"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
+                )}
               </div>
             ))
           ) : activeStep === 2 ? (
-            <ShippingForm setShippingForm={setShippingForm} />
-          ) : activeStep === 3 && shippingForm ? (
-            <StripePaymentForm shippingForm={shippingForm} />
-          ) : (
-            <p className="text-sm text-gray-500">
-              Please fill in the shipping form to continue.
-            </p>
-          )}
+            <ShippingForm setShippingForm={handleSetShippingForm} />
+          ) : activeStep === 3 ? (
+            shippingForm ? (
+              <StripePaymentForm shippingForm={shippingForm} />
+            ) : (
+              <p className="text-sm text-gray-500">
+                Please fill in the shipping form first.{" "}
+                <button
+                  onClick={() => router.push("/cart?step=2", { scroll: false })}
+                  className="underline text-gray-800 cursor-pointer"
+                >
+                  Go to Shipping
+                </button>
+              </p>
+            )
+          ) : null}
         </div>
         {/* DETAILS */}
         <div className="w-full lg:w-5/12 shadow-lg border-1 border-gray-100 p-8 rounded-lg flex flex-col gap-8 h-max">

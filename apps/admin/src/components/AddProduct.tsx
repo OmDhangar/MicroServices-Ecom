@@ -1,5 +1,7 @@
 "use client";
 
+import React from "react";
+
 import {
   SheetContent,
   SheetDescription,
@@ -58,6 +60,11 @@ const fetchCategories = async () => {
 };
 
 const AddProduct = () => {
+  const [selectedFiles, setSelectedFiles] = React.useState<Record<string, File>>(
+    {}
+  );
+  const [previews, setPreviews] = React.useState<Record<string, string>>({});
+
   const form = useForm<z.infer<typeof ProductFormSchema>>({
     resolver: zodResolver(ProductFormSchema),
     defaultValues: {
@@ -72,7 +79,7 @@ const AddProduct = () => {
     },
   });
 
-  const { isPending, error, data } = useQuery({
+  const { isPending, data } = useQuery({
     queryKey: ["categories"],
     queryFn: fetchCategories,
   });
@@ -82,6 +89,8 @@ const AddProduct = () => {
   const mutation = useMutation({
     mutationFn: async (data: z.infer<typeof ProductFormSchema>) => {
       const token = await getToken();
+
+      // 1. Create the product
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL}/products`,
         {
@@ -93,17 +102,81 @@ const AddProduct = () => {
           },
         }
       );
+
       if (!res.ok) {
-        throw new Error("Failed to create product!");
+        const errData = await res.json();
+        throw new Error(errData.message || "Failed to create product!");
+      }
+
+      const createdProduct = await res.json();
+      const productId = createdProduct.id;
+
+      // 2. Upload images for each color
+      for (const color of data.colors) {
+        const file = selectedFiles[color];
+        if (file) {
+          const formData = new FormData();
+          formData.append("files[]", file); // product-service expects files[]
+          formData.append("color", color);
+
+          const uploadRes = await fetch(
+            `${process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL}/products/${productId}/upload`,
+            {
+              method: "POST",
+              body: formData,
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+
+          if (!uploadRes.ok) {
+            const uploadErr = await uploadRes.json();
+            throw new Error(`Failed to upload image for ${color}: ${uploadErr.message}`);
+          }
+        }
       }
     },
     onSuccess: () => {
-      toast.success("Product created successfully");
+      toast.success("Product and images uploaded successfully");
+      form.reset();
+      setSelectedFiles({});
+      setPreviews({});
     },
     onError: (error) => {
       toast.error(error.message);
     },
   });
+
+  const handleFileChange = (color: string, file: File | undefined) => {
+    if (file) {
+      setSelectedFiles((prev) => ({ ...prev, [color]: file }));
+      const url = URL.createObjectURL(file);
+      setPreviews((prev) => ({ ...prev, [color]: url }));
+
+      // Update form value to satisfy validation
+      const currentImages = form.getValues("images") || {};
+      form.setValue("images", {
+        ...currentImages,
+        [color]: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", // Placeholder for Zod validation
+      });
+    } else {
+      setSelectedFiles((prev) => {
+        const next = { ...prev };
+        delete next[color];
+        return next;
+      });
+      setPreviews((prev) => {
+        const next = { ...prev };
+        delete next[color];
+        return next;
+      });
+      const currentImages = form.getValues("images") || {};
+      const nextImages = { ...currentImages };
+      delete nextImages[color];
+      form.setValue("images", nextImages);
+    }
+  };
 
   return (
     <SheetContent>
@@ -113,7 +186,7 @@ const AddProduct = () => {
           <SheetDescription asChild>
             <Form {...form}>
               <form
-                className="space-y-8"
+                className="space-y-8 pb-20"
                 onSubmit={form.handleSubmit((data) => mutation.mutate(data))}
               >
                 <FormField
@@ -226,7 +299,7 @@ const AddProduct = () => {
                           {sizes.map((size) => (
                             <div className="flex items-center gap-2" key={size}>
                               <Checkbox
-                                id="size"
+                                id={`size-${size}`}
                                 checked={field.value?.includes(size)}
                                 onCheckedChange={(checked) => {
                                   const currentValues = field.value || [];
@@ -239,7 +312,7 @@ const AddProduct = () => {
                                   }
                                 }}
                               />
-                              <label htmlFor="size" className="text-xs">
+                              <label htmlFor={`size-${size}`} className="text-xs">
                                 {size}
                               </label>
                             </div>
@@ -268,7 +341,7 @@ const AddProduct = () => {
                                 key={color}
                               >
                                 <Checkbox
-                                  id="color"
+                                  id={`color-${color}`}
                                   checked={field.value?.includes(color)}
                                   onCheckedChange={(checked) => {
                                     const currentValues = field.value || [];
@@ -278,11 +351,13 @@ const AddProduct = () => {
                                       field.onChange(
                                         currentValues.filter((v) => v !== color)
                                       );
+                                      // Also remove image for this color
+                                      handleFileChange(color, undefined);
                                     }
                                   }}
                                 />
                                 <label
-                                  htmlFor="color"
+                                  htmlFor={`color-${color}`}
                                   className="text-xs flex items-center gap-2"
                                 >
                                   <div
@@ -308,12 +383,12 @@ const AddProduct = () => {
                   name="images"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Images</FormLabel>
+                      <FormLabel>Images (S3 Upload)</FormLabel>
                       <FormControl>
                         <div className="">
                           {form.watch("colors")?.map((color) => (
                             <div
-                              className="mb-4 flex items-center gap-4"
+                              className="mb-6 flex flex-col gap-2"
                               key={color}
                             >
                               <div className="flex items-center gap-2">
@@ -321,70 +396,49 @@ const AddProduct = () => {
                                   className="w-4 h-4 rounded-full"
                                   style={{ backgroundColor: color }}
                                 />
-                                <span className="text-sm font-medium min-w-[80px]">
-                                  {color}:
+                                <span className="text-sm font-medium">
+                                  {color.charAt(0).toUpperCase() + color.slice(1)}:
                                 </span>
                               </div>
-                              <Input
-                                type="file"
-                                accept="image/*"
-                                onChange={async (e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    try {
-                                      const formData = new FormData();
-                                      formData.append("file", file);
-                                      formData.append(
-                                        "upload_preset",
-                                        "ecommerce"
-                                      );
-
-                                      const res = await fetch(
-                                        `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
-                                        {
-                                          method: "POST",
-                                          body: formData,
-                                        }
-                                      );
-                                      const data = await res.json();
-
-                                      if (data.secure_url) {
-                                        const currentImages =
-                                          form.getValues("images") || {};
-                                        form.setValue("images", {
-                                          ...currentImages,
-                                          [color]: data.secure_url,
-                                        });
-                                      }
-                                    } catch (error) {
-                                      console.log(error);
-                                      toast.error("Upload failed!");
-                                    }
-                                  }
-                                }}
-                              />
+                              <div className="flex items-center gap-4">
+                                <Input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => handleFileChange(color, e.target.files?.[0])}
+                                />
+                                {previews[color] && (
+                                  <div className="relative w-12 h-12 rounded overflow-hidden border">
+                                    <img
+                                      src={previews[color]}
+                                      alt="Preview"
+                                      className="object-cover w-full h-full"
+                                    />
+                                  </div>
+                                )}
+                              </div>
                               {field.value?.[color] ? (
-                                <span className="text-green-600 text-sm">
-                                  Image selected
+                                <span className="text-green-600 text-[10px] font-semibold">
+                                  ✓ Ready for upload
                                 </span>
                               ) : (
-                                <span className="text-red-600 text-sm">
-                                  Image required
+                                <span className="text-red-500 text-[10px]">
+                                  ⚠ Image required
                                 </span>
                               )}
                             </div>
                           ))}
                         </div>
                       </FormControl>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
                 <Button
                   type="submit"
                   disabled={mutation.isPending}
-                  className="disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {mutation.isPending ? "Submitting..." : "Submit"}
+                  {mutation.isPending ? "Configuring product & uploading..." : "Create Product"}
                 </Button>
               </form>
             </Form>

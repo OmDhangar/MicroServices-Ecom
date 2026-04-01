@@ -36,7 +36,7 @@ export const generateMetadata = async ({
 }: {
   params: Promise<{ id: string }>;
 }) => {
-    const { id } = await params;
+  const { id } = await params;
 
   const product = await fetchProduct(id);
   return {
@@ -64,9 +64,14 @@ const ProductPage = async ({
       {/* IMAGE */}
       <div className="w-full lg:w-5/12 relative aspect-[2/3]">
         <Image
-          src={
-            (product.images as Record<string, string>)?.[selectedColor] || ""
-          }
+          src={(() => {
+            const src = (product.images as Record<string, string>)?.[
+              selectedColor
+            ];
+            return src?.startsWith("http") || src?.startsWith("data:")
+              ? src
+              : "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+          })()}
           alt={product.name}
           fill
           className="object-contain rounded-md"

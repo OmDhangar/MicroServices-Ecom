@@ -11,6 +11,25 @@ const fastify = Fastify();
 
 fastify.register(Clerk.clerkPlugin);
 
+// Manual CORS implementation since @fastify/cors is missing
+fastify.addHook("onRequest", async (request, reply) => {
+  reply.header("Access-Control-Allow-Origin", "http://localhost:3002");
+  reply.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  reply.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  reply.header("Access-Control-Allow-Credentials", "true");
+  if (request.method === "OPTIONS") {
+    return reply.status(204).send();
+  }
+});
+
+fastify.setErrorHandler((error, request, reply) => {
+  console.error("Order Service Error:", error);
+  reply.status(error.statusCode || 500).send({
+    message: error.message || "Internal Server Error",
+    error: process.env.NODE_ENV === "development" ? error.stack : undefined,
+  });
+});
+
 fastify.get("/health", (request, reply) => {
   return reply.status(200).send({
     status: "ok",
@@ -31,10 +50,10 @@ fastify.register(cartRoute);
 
 const start = async () => {
   try {
-    Promise.all([
-      await connectOrderDB(),
-      await producer.connect(),
-      await consumer.connect(),
+    await Promise.all([
+      connectOrderDB(),
+      producer.connect(),
+      consumer.connect(),
     ]);
     await runKafkaSubscriptions();
     await fastify.listen({ port: 8001 });

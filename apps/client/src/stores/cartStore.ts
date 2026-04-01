@@ -2,7 +2,8 @@ import { CartStoreActionsType, CartStoreStateType } from "@repo/types";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
-const ORDER_SERVICE_URL = "http://localhost:8001";
+const ORDER_SERVICE_URL =
+  process.env.NEXT_PUBLIC_ORDER_SERVICE_URL || "http://localhost:8001";
 
 let syncTimeout: ReturnType<typeof setTimeout> | null = null;
 

@@ -4,6 +4,18 @@ import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { SubmitHandler, useForm } from "react-hook-form";
 
+const SHIPPING_FORM_KEY = "checkout_shipping_form";
+
+const getStoredShippingForm = (): Partial<ShippingFormInputs> => {
+  if (typeof window === "undefined") return {};
+  try {
+    const stored = sessionStorage.getItem(SHIPPING_FORM_KEY);
+    return stored ? (JSON.parse(stored) as ShippingFormInputs) : {};
+  } catch {
+    return {};
+  }
+};
+
 const ShippingForm = ({
   setShippingForm,
 }: {
@@ -15,6 +27,7 @@ const ShippingForm = ({
     formState: { errors },
   } = useForm<ShippingFormInputs>({
     resolver: zodResolver(shippingFormSchema as any),
+    defaultValues: getStoredShippingForm(),
   });
 
   const router = useRouter();

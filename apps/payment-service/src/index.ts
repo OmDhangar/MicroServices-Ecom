@@ -8,7 +8,8 @@ import { runKafkaSubscriptions } from "./utils/subscriptions.js";
 import webhookRoute from "./routes/webhooks.route.js";
 
 const app = new Hono();
-app.use("*", clerkMiddleware());
+
+// CORS must be first so preflight OPTIONS requests are handled before auth
 app.use("*", cors({ origin: ["http://localhost:3002"] }));
 
 app.get("/health", (c) => {
@@ -19,8 +20,16 @@ app.get("/health", (c) => {
   });
 });
 
+app.use("/sessions/*", clerkMiddleware());
+app.use("/webhooks/*", clerkMiddleware());
 app.route("/sessions", sessionRoute);
 app.route("/webhooks", webhookRoute);
+
+// Always return JSON errors — prevents "Internal Server Error" plain text
+app.onError((err, c) => {
+  console.error("[payment-service] Unhandled error:", err.message, err.stack);
+  return c.json({ error: err.message || "Internal Server Error" }, 500);
+});
 
 // app.post("/create-stripe-product", async (c) => {
 //   const res = await stripe.products.create({
@@ -44,21 +53,27 @@ app.route("/webhooks", webhookRoute);
 // });
 
 const start = async () => {
+  // Start HTTP server immediately — don't gate it behind Kafka
+  serve(
+    {
+      fetch: app.fetch,
+      port: 8002,
+    },
+    (info) => {
+      console.log(`Payment service is running on port 8002`);
+    }
+  );
+
+  // Connect Kafka in background — best-effort (not required for checkout sessions)
   try {
-    Promise.all([await producer.connect(), await consumer.connect()]);
-    await runKafkaSubscriptions()
-    serve(
-      {
-        fetch: app.fetch,
-        port: 8002,
-      },
-      (info) => {
-        console.log(`Payment service is running on port 8002`);
-      }
-    );
+    await Promise.all([producer.connect(), consumer.connect()]);
+    await runKafkaSubscriptions();
+    console.log("Kafka connected and subscriptions running");
   } catch (error) {
-    console.log(error);
-    process.exit(1);
+    console.warn(
+      "Kafka unavailable — running without Kafka (checkout sessions unaffected):",
+      (error as Error).message
+    );
   }
 };
 start();

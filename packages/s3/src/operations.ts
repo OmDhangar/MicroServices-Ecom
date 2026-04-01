@@ -79,8 +79,18 @@ export const deleteFromS3 = async (key: string): Promise<void> => {
 
 export const getPublicUrl = (key: string): string => {
     const domain = process.env.CLOUDFRONT_DOMAIN;
-    if (!domain) {
-        throw new Error("CLOUDFRONT_DOMAIN environment variable is required");
+    if (domain) {
+        return `https://${domain}/${key}`;
     }
-    return `https://${domain}/${key}`;
+
+    const bucket = process.env.AWS_S3_BUCKET;
+    const region = process.env.AWS_REGION;
+
+    if (!bucket || !region) {
+        throw new Error(
+            "Either CLOUDFRONT_DOMAIN or (AWS_S3_BUCKET and AWS_REGION) must be provided"
+        );
+    }
+
+    return `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
 };

@@ -89,15 +89,22 @@ export const createTryOnJob = async (req: Request, res: Response) => {
             status: "pending",
         });
 
-        // 7. Publish to RabbitMQ
-        await publishToQueue("tryon-jobs", {
-            jobId,
-            userId,
-            productId,
-            cartItemId,
-            userImageKey,
-            productImageKey: productFileMeta.key,
-        });
+        // 7. Publish to RabbitMQ (best-effort — job is already persisted in DB)
+        try {
+            await publishToQueue("tryon-jobs", {
+                jobId,
+                userId,
+                productId,
+                cartItemId,
+                userImageKey,
+                productImageKey: productFileMeta.key,
+            });
+        } catch (mqError) {
+            console.warn(
+                "RabbitMQ unavailable — try-on job saved but not queued. Worker will pick it up when connected:",
+                (mqError as Error).message
+            );
+        }
 
         return res.status(200).json({
             message: "Try-on job created",

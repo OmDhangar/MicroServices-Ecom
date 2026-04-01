@@ -29,8 +29,6 @@ export const orderRoute = async (fastify: FastifyInstance) => {
       const now = new Date();
       const sixMonthsAgo = startOfMonth(subMonths(now, 5));
 
-      // { month: "April", total: 173, successful: 100 }
-
       const raw = await Order.aggregate([
         {
           $match: {
@@ -47,12 +45,6 @@ export const orderRoute = async (fastify: FastifyInstance) => {
             successful: {
               $sum: {
                 $cond: [{ $eq: ["$status", "success"] }, 1, 0],
-                // {
-                //   "year":2025,
-                //   "month":9,
-                //   "total":100,
-                //   "successful":72
-                // }
               },
             },
           },
