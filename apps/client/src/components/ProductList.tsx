@@ -3,6 +3,7 @@ import Categories from "./Categories";
 import ProductCard from "./ProductCard";
 import Link from "next/link";
 import Filter from "./Filter";
+import { ShoppingBasket } from "lucide-react";
 
 // TEMPORARY
 // const products: ProductsType = [
@@ -151,11 +152,29 @@ const fetchData = async ({
   search?: string;
   params: "homepage" | "products";
 }) => {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL}/products?${category ? `category=${category}` : ""}${search ? `&search=${search}` : ""}&sort=${sort || "newest"}${params === "homepage" ? "&limit=8" : ""}`
-  );
-  const data: ProductType[] = await res.json();
-  return data;
+  try {
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_PRODUCT_SERVICE_URL}/products?${
+        category ? `category=${category}` : ""
+      }${search ? `&search=${search}` : ""}&sort=${sort || "newest"}${
+        params === "homepage" ? "&limit=8" : ""
+      }`,
+      {
+        next: { tags: ["products"] },
+      }
+    );
+    
+    if (!res.ok) {
+      console.error("Failed to fetch products. Status:", res.status);
+      return [];
+    }
+    
+    const data: ProductType[] = await res.json();
+    return data;
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    return [];
+  }
 };
 const ProductList = async ({
   category,
@@ -169,25 +188,33 @@ const ProductList = async ({
   params: "homepage" | "products";
 }) => {
   const products = await fetchData({ category, sort, search, params });
+  
   return (
     <div className="w-full">
-      <Categories />
-      {params === "products" && <Filter />}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-12">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-16">
         {products && products.length > 0 ? (
           products.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))
         ) : (
-          <p>No products found.</p>
+          <div className="col-span-full flex flex-col items-center justify-center py-20 bg-gray-50 rounded-3xl border border-dashed border-gray-200">
+            <ShoppingBasket className="w-12 h-12 text-gray-300 mb-4" />
+            <p className="text-gray-500 font-medium text-lg">No products found in this category.</p>
+            <Link href="/products" className="mt-4 text-black underline underline-offset-4 decoration-1 font-semibold hover:text-gray-600 transition-colors">View all products</Link>
+          </div>
         )}
       </div>
-      <Link
-        href={category ? `/products/?category=${category}` : "/products"}
-        className="flex justify-end mt-4 underline text-sm text-gray-500"
-      >
-        View all products
-      </Link>
+      
+      {params === "homepage" && (
+        <Link
+          href={category ? `/products/?category=${category}` : "/products"}
+          className="flex justify-center mt-12 group"
+        >
+          <button className="px-8 py-3 rounded-full border border-black hover:bg-black hover:text-white transition-all duration-300 font-medium cursor-pointer">
+            View All Products
+          </button>
+        </Link>
+      )}
     </div>
   );
 };

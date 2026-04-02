@@ -41,14 +41,20 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 
 const start = async () => {
   try {
-    Promise.all([await producer.connect(), await consumer.connect()]);
+    await Promise.all([producer.connect(), consumer.connect()]);
+    console.log("Connected to Kafka successfully");
+  } catch (error) {
+    console.log("Failed to connect to Kafka, continuing without it:", error);
+  }
+
+  try {
     app.listen(8000, () => {
       console.log("Product service is running on 8000");
     });
   } catch (error) {
-    console.log(error);
+    console.log("Failed to start server on 8000:", error);
     process.exit(1);
   }
 };
 
-start()
+start();

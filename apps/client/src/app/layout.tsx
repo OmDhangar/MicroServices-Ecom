@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import { ToastContainer } from "react-toastify";
 import { ClerkProvider } from "@clerk/nextjs";
 
@@ -17,8 +18,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Trendlama - Best Clothes",
-  description: "Trendlama is the best place to find the best clothes",
+  title: "Trendlama - Premium Fashion",
+  description: "Experience premium quality clothes with Trendlama",
 };
 
 export default function RootLayout({
@@ -28,16 +29,19 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html lang="en">
+      <html lang="en" className="scroll-smooth">
         <body
           suppressHydrationWarning
-          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+          className={`${geistSans.variable} ${geistMono.variable} antialiased selection:bg-black selection:text-white`}
         >
-          <div className="mx-auto p-4 sm:px-0 sm:max-w-xl md:max-w-2xl lg:max-w-3xl xl:max-w-6xl">
+          <div className="mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl pt-24 md:pt-28">
             <Navbar />
-            {children}
-            <Footer />
+            <Breadcrumbs />
+            <main className="min-h-[calc(100vh-300px)]">
+              {children}
+            </main>
           </div>
+          <Footer />
           <ToastContainer position="bottom-right" />
         </body>
       </html>
