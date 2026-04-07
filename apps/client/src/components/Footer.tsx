@@ -17,7 +17,7 @@ const Footer = () => {
               <span className="font-serif italic text-gray-500 pl-1 md:pl-2">The Loop.</span>
             </h2>
             <p className="text-gray-500 font-medium text-sm md:text-base max-w-md pt-2">
-              Subscribe for exclusive drops, early access to sales, and curated editorial content.
+              Subscribe for exclusive drops,and collection early access to sales, and curated editorial content.
             </p>
           </div>
 
